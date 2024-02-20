@@ -2,7 +2,7 @@
     <br />
     <img src="./logos/addtopath.svg" alt="AddToPath Logo" width="200"/>
     <h1>Add To Path</h1>
-    <h3>Adds the first argument to USER PATH environment variable without truncating it like setx.</h3>
+    <h3>Adds the first argument to the USER PATH environment variable without truncating it like setx.</h3>
 </div>
 
 > [!NOTE]  
