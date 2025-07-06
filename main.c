@@ -17,16 +17,17 @@ typedef long LSTATUS;
 #define wcscat_s(a, b, c) wcscat(a, c)
 #endif
 
+#define MAX_ENV (16*1024)
+
 typedef enum {
     ATP_FailedToSetRegistryKey,
     ATP_FailedToOpenRegistryKey,
+    ATP_FailedToGetRegistryKey,
     ATP_PathKeyNotExisting,
     ATP_Ok,
 } AddToPathErr;
 
 AddToPathErr add_to_path(const wchar_t* input_path) {
-    wchar_t path[32*1024] = {'%', 'P', 'A', 'T', 'H', '%', ';'};
-    wcscat_s(path, 16*1024, input_path);
     HKEY key_handle = 0;
     DWORD disposition = 0;
     LSTATUS status = RegCreateKeyExW(
@@ -46,27 +47,35 @@ AddToPathErr add_to_path(const wchar_t* input_path) {
     if (disposition != REG_OPENED_EXISTING_KEY) {
         return ATP_PathKeyNotExisting;
     }
-    add_to_path_log(L"path \"%s\"\n", path);
-    wchar_t path_expanded[32 *1024] = {0};
-    ExpandEnvironmentStringsW(
-        path,
-        path_expanded,
-        32*1024
-    );
-    add_to_path_log(L"path expanded %s\n", path_expanded);
-    LSTATUS status2 = RegSetValueExW(
+    wchar_t path[MAX_ENV] = {0};
+    DWORD old_path_size;
+    status = RegGetValueW(
         key_handle,
-        L"Path", //Automatically null terminated
+        L"Path",
+        0,
+        RRF_RT_ANY,
+        NULL,
+        path,
+        &old_path_size
+    );
+    if (status != ERROR_SUCCESS) {
+        return ATP_FailedToGetRegistryKey;
+    }
+    wprintf(L"%ls", path);
+    wcscat_s(path, MAX_ENV, L";");
+    wcscat_s(path, MAX_ENV, input_path);
+    status = RegSetValueExW(
+        key_handle,
+        L"Path",
         0,
         REG_EXPAND_SZ,
-        (BYTE*) path_expanded,
-        (DWORD)(2*wcslen(path_expanded) + 1)
+        (BYTE*)path,
+        (DWORD)(2*wcslen(path) + 1)
     );
-    if (status2 == ERROR_SUCCESS) {
-        return ATP_Ok;
-    } else {
+    if (status != ERROR_SUCCESS) {
         return ATP_FailedToSetRegistryKey;
     }
+    return ATP_Ok;
 }
 
 #ifdef __GNUC__
@@ -84,21 +93,23 @@ int wmain(int argc, wchar_t** argv) {
             exit(-1);
         }
         AddToPathErr err = add_to_path(path);
-        if (err == ATP_Ok) {
-            printf("Added Directory to path\n");
-        }
-        else if(err == ATP_FailedToOpenRegistryKey) {
-            printf("Failed to open registry key\n");
-        }
-        else if(err == ATP_FailedToSetRegistryKey) {
-            printf("Failed to set registry key\n");
-        }
-        else if (err == ATP_PathKeyNotExisting) {
-            printf("Path Key does not exist\n");
-        }
-        else {
-            printf("Unknown error");
-            assert(0);
+        switch (err) {
+            break;case ATP_Ok: {
+                printf("Added Directory to path\n");
+            }
+            break;case ATP_FailedToOpenRegistryKey: {
+                printf("Failed to open registry key\n");
+            }
+            break;case ATP_FailedToSetRegistryKey: {
+                printf("Failed to set registry key\n");
+            }
+            break;case ATP_FailedToGetRegistryKey: {
+                printf("Failed to get registry key\n");
+            }
+            break;case ATP_PathKeyNotExisting: {
+                printf("Path Key does not exist\n");
+            }
+            break;default: assert(0);
         }
     } else {
         printf("Usage: addtopath <dirname>");
