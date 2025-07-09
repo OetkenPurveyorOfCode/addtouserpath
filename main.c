@@ -27,6 +27,38 @@ typedef enum {
     ATP_Ok,
 } AddToPathErr;
 
+void PrintLastErrorMessage(DWORD errorCode)
+{
+    if (errorCode == 0)
+    {
+        printf("No error.\n");
+        return;
+    }
+
+    LPWSTR messageBuffer = NULL;
+
+    // Format the error message from the system
+    DWORD size = FormatMessageW(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL,
+        errorCode,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPWSTR)&messageBuffer,
+        0,
+        NULL);
+
+    if (size == 0)
+    {
+        printf("Failed to format error message. Error code: %lu\n", errorCode);
+        return;
+    }
+
+    wprintf(L"Error 0x%08X: %s\n", errorCode, messageBuffer);
+
+    // Free the buffer allocated by FormatMessage
+    LocalFree(messageBuffer);
+}
+
 AddToPathErr add_to_path(const wchar_t* input_path) {
     HKEY key_handle = 0;
     DWORD disposition = 0;
@@ -48,17 +80,24 @@ AddToPathErr add_to_path(const wchar_t* input_path) {
         return ATP_PathKeyNotExisting;
     }
     wchar_t path[MAX_ENV] = {0};
-    DWORD old_path_size;
+    DWORD old_path_size = MAX_ENV*2;
     status = RegGetValueW(
         key_handle,
+        L"",
         L"Path",
-        0,
         RRF_RT_ANY,
         NULL,
         path,
         &old_path_size
     );
+    if (status == ERROR_MORE_DATA) {
+        printf("more data");
+    }
+    if (status == ERROR_FILE_NOT_FOUND) {
+        printf("key not found");
+    }
     if (status != ERROR_SUCCESS) {
+        PrintLastErrorMessage(status);
         return ATP_FailedToGetRegistryKey;
     }
     wprintf(L"%ls", path);
